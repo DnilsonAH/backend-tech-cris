@@ -1,51 +1,54 @@
-import 'package:flutter/material.dart';
-import 'package:confeciones_tech/screens/auth_screen.dart'; // Crearemos esto
-import 'package:confeciones_tech/screens/home_screen.dart'; // Crearemos esto
-import 'package:confeciones_tech/services/supabase_service.dart'; // Crearemos esto
+// @ts-nocheck
+import { createClient } from '@supabase/supabase-js';
+import { NextResponse } from 'next/server';
 
-Future < void> main() async {
-    WidgetsFlutterBinding.ensureInitialized();
-    await SupabaseService.initialize(); // Inicializa Supabase
-    runApp(const MyApp());
-}
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-class MyApp extends StatelessWidget {
-    const MyApp({ super.key });
+export const dynamic = 'force-dynamic' // defaults to auto
 
-    @override
-  Widget build(BuildContext context) {
-        return MaterialApp(
-            title: 'Confeciones Tech',
-            debugShowCheckedModeBanner: false,
-            theme: ThemeData(
-                primarySwatch: Colors.lightBlue, // Azul claro como color principal
-                hintColor: Colors.cyanAccent, // Otro tono de celeste
-                scaffoldBackgroundColor: Colors.white,
-                appBarTheme: const AppBarTheme(
-                    backgroundColor: Colors.lightBlue, // AppBar en celeste
-                    foregroundColor: Colors.white, // Texto de AppBar en blanco
-                ),
-                    textTheme: const TextTheme(
-                        bodyLarge: TextStyle(color: Colors.black87),
-                            bodyMedium: TextStyle(color: Colors.black54),
-        ),
-        // Puedes personalizar más el tema aquí
-      ),
-        home: StreamBuilder(
-            stream: SupabaseService.supabase.auth.onAuthStateChange,
-            builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Scaffold(
-                        body: Center(child: CircularProgressIndicator()),
-            );
+export async function GET(request) {
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    try {
+        const { data, error } = await supabase
+            .from('posts') // Asume que tienes una tabla 'posts'
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('Error fetching posts:', error);
+            return NextResponse.json({ error: error.message }, { status: 500 });
+        }
+
+        return NextResponse.json(data, { status: 200 });
+    } catch (err) {
+        console.error('Server error:', err);
+        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
-          final user = snapshot.data?.session?.user;
-    if(user != null) {
-    return const HomeScreen(); // Si hay usuario, ir a la pantalla principal
 }
-return const AuthScreen(); // Si no, ir a la pantalla de autenticación
-        },
-      ),
-    );
-  }
+
+export async function POST(request) {
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    try {
+        const body = await request.json();
+        const { title, content, user_id } = body; // Asegúrate de enviar user_id desde Flutter
+
+        if (!title || !content || !user_id) {
+            return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+        }
+
+        const { data, error } = await supabase
+            .from('posts')
+            .insert([{ title, content, user_id }]);
+
+        if (error) {
+            console.error('Error inserting post:', error);
+            return NextResponse.json({ error: error.message }, { status: 500 });
+        }
+
+        return NextResponse.json(data, { status: 201 });
+    } catch (err) {
+        console.error('Server error:', err);
+        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    }
 }
